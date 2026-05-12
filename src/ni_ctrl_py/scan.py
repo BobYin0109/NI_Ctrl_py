@@ -12,7 +12,13 @@ from typing import TextIO
 from .config import ScanConfig
 from .ni_trigger import DryRunTrigger, NIDigitalTrigger, NITimingSnapshot
 from .pi_stage import DryRunStage, PIStage
-from .scan_plan import assert_within_limits, describe_positions, format_um, make_z_positions, to_decimal
+from .scan_plan import (
+    assert_within_limits,
+    describe_positions,
+    format_um,
+    make_z_positions,
+    to_decimal,
+)
 
 LOG = logging.getLogger(__name__)
 
@@ -62,7 +68,11 @@ def run_scan(config: ScanConfig) -> Path:
 
     with log_path.open("w", newline="", encoding="utf-8") as handle:
         writer = _make_writer(handle)
-        with stage as stage_controller, trigger as trigger_controller, NITimingSnapshot(config.daq) as timing:
+        with (
+            stage as stage_controller,
+            trigger as trigger_controller,
+            NITimingSnapshot(config.daq) as timing,
+        ):
             _move_to_home(config, stage_controller)
             t0 = time.perf_counter()
             for index, z_um in enumerate(positions):

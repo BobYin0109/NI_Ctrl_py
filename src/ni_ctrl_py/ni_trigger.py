@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Optional, Protocol
+from typing import Any, Protocol
 
 from .config import DAQConfig, TimingConfig
 
@@ -18,7 +18,7 @@ class DryRunTrigger:
     def __init__(self, timing: TimingConfig) -> None:
         self.timing = timing
 
-    def __enter__(self) -> "DryRunTrigger":
+    def __enter__(self) -> DryRunTrigger:
         LOG.info("DRY RUN: NI trigger task connection skipped.")
         return self
 
@@ -37,9 +37,9 @@ class NIDigitalTrigger:
     def __init__(self, daq: DAQConfig, timing: TimingConfig) -> None:
         self.daq = daq
         self.timing = timing
-        self._task: Optional[Any] = None
+        self._task: Any | None = None
 
-    def __enter__(self) -> "NIDigitalTrigger":
+    def __enter__(self) -> NIDigitalTrigger:
         try:
             import nidaqmx
             from nidaqmx.constants import LineGrouping
@@ -82,9 +82,9 @@ class NITimingSnapshot:
 
     def __init__(self, daq: DAQConfig) -> None:
         self.daq = daq
-        self._task: Optional[Any] = None
+        self._task: Any | None = None
 
-    def __enter__(self) -> "NITimingSnapshot":
+    def __enter__(self) -> NITimingSnapshot:
         if not self.daq.timing_lines or not self.daq.read_timing_snapshots:
             return self
 
