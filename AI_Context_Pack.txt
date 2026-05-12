@@ -1,0 +1,573 @@
+AI CONTEXT PACK — PI E-727.3CD + NI PCIe-6353 + SCB-68A + CMOS Triggered Z-Stack Imaging
+
+1. MAIN PURPOSE
+
+The user wants help with two tightly coupled tasks:
+
+1) Writing Python code to control a PI nano XYZ piezo stage and a CMOS camera for stepwise imaging.
+2) Confirming the physical wiring scheme so that the Python code, NI DAQ line names, SCB-68A terminal numbers, and CMOS ports match exactly.
+
+The key requirement is safety and correctness. Wrong wiring may cause the CMOS not to trigger, timing not to be recorded, or the signal to be shorted.
+
+Target experiment:
+
+Move PI stage to a Z position
+→ wait until the stage reaches target
+→ wait a short settling time, e.g. 30 ms
+→ NI PCIe-6353 sends TTL trigger to CMOS
+→ CMOS captures one frame
+→ optionally CMOS TIMING OUT returns exposure/frame timing to NI
+→ repeat for all Z positions.
+
+Example scan:
+
+Z = 48.00 µm to 52.00 µm
+step = 0.01 µm
+total positions = 401
+
+The final implementation should use Python to coordinate PI motion and NI trigger output.
+
+
+2. CONFIRMED HARDWARE
+
+2.1 PI Motion System
+
+Confirmed PI controller model:
+
+PI E-727.3CD
+
+Meaning:
+
+3-axis controller
+Capacitive sensor feedback
+Digital controller
+No “A” suffix
+No “P” suffix
+
+Important consequence:
+
+E-727.3CD has no analog input/output interface.
+Only A/AP variants have analog input/output.
+Therefore, do not use NI AO to control the PI stage.
+
+Invalid chain:
+
+NI AO → E-727 analog input → control Z scan
+
+Correct PI motion control chain:
+
+Computer
+→ USB or RS-232
+→ PI E-727.3CD
+→ original PI stage cable
+→ PI nano XYZ piezo stage
+
+The stage motion should be controlled through PI software commands, for example:
+
+PIMikroMove macro
+PIPython
+GCS commands
+
+Example PIMikroMove-style logic:
+
+MOV 3 48.00
+WAC ONT? 3 = 1
+DEL 30
+
+This only moves the PI stage. It does not trigger the CMOS camera.
+
+
+2.2 NI DAQ System
+
+Confirmed NI hardware:
+
+NI PCIe-6353
+SCB-68A shielded I/O connector block
+SHC68-68-EPM 68-pin shielded cable
+
+From the NI quote:
+
+PCIe-6353: X Series DAQ, 32 AI, 48 DIO, 4 AO
+SCB-68A: shielded I/O connector block
+SHC68-68-EPM: shielded cable, 68-D-Type to 68 VHDCI offset, 1 m
+
+Physical relationship:
+
+Computer PCIe slot
+→ NI PCIe-6353 card inside the computer
+→ SHC68-68-EPM cable
+→ SCB-68A external terminal block
+→ CMOS trigger/timing wiring
+
+Important clarification:
+
+The blue box in the photos is the SCB-68A terminal block.
+The PCIe-6353 card is installed inside the computer.
+External wires are connected on the SCB-68A terminal block.
+
+
+2.3 CMOS Camera
+
+The CMOS rear panel has:
+
+EXT. TRIG input
+TIMING output
+Other digital outputs, temporarily not used
+
+The CMOS image data does not go through NI.
+
+Correct camera data chain:
+
+CMOS camera
+→ camera data cable
+→ image acquisition computer/software
+
+Correct trigger/timing chain:
+
+NI SCB-68A digital output
+→ CMOS EXT. TRIG
+
+CMOS TIMING OUT
+→ NI SCB-68A digital input
+
+The CMOS camera should not be directly connected to the PI E-727 controller.
+
+
+3. FINAL SYSTEM ARCHITECTURE
+
+Correct overall chain:
+
+Computer
+├── USB or RS-232
+│   └── PI E-727.3CD
+│       └── original PI stage cable
+│           └── PI nano XYZ piezo stage
+│
+├── PCIe slot
+│   └── NI PCIe-6353
+│       └── SHC68-68-EPM cable
+│           └── SCB-68A terminal block
+│               ├── digital output → CMOS EXT. TRIG
+│               └── digital input  ← CMOS TIMING OUT
+│
+└── camera data interface
+    └── CMOS camera image acquisition software
+
+Role separation:
+
+PI E-727.3CD:
+Controls stage motion through USB/RS-232.
+
+NI PCIe-6353 + SCB-68A:
+Triggers the CMOS camera and optionally records CMOS timing.
+
+CMOS camera:
+Captures images using its own image acquisition cable/software.
+
+
+4. COAXIAL CABLE EXPLANATION
+
+The CMOS trigger/timing ports use SMA-style coaxial connections.
+
+A coaxial cable has two conductive parts:
+
+Center conductor / center core = signal line
+Shield layer / braided outer conductor = ground / GND
+Outer insulation = protection only
+
+For each coaxial cable:
+
+Center conductor connects to the signal terminal.
+Shield layer connects to D GND.
+
+Do not allow the center conductor and shield layer to touch each other. That would short the signal to ground.
+
+The user should buy SMA male to bare-wire coaxial cables so that:
+
+SMA male side connects to the CMOS camera.
+Bare wire side connects to SCB-68A screw terminals.
+
+
+5. FINAL PHYSICAL WIRING SCHEME
+
+5.1 NI Trigger Output to CMOS EXT. TRIG
+
+Use SCB-68A terminal 40 as the trigger output.
+The right side of the SCB-68A had a label from previous users indicating it was used as trigger OUT.
+
+Final trigger wiring:
+
+CMOS EXT. TRIG center conductor
+→ SCB-68A Terminal 40
+
+CMOS EXT. TRIG shield / ground
+→ SCB-68A Terminal 7
+
+Function:
+
+NI digital output pulse
+→ CMOS external trigger input
+→ CMOS captures one frame
+
+Assumed terminal mapping:
+
+Terminal 40 = PFI13 / P2.5
+Terminal 7  = D GND
+
+Python line mapping:
+
+DAQ_TRIGGER_LINE = "Dev1/port2/line5"
+
+If NI MAX shows the device name is not Dev1, replace Dev1 accordingly:
+
+DAQ_TRIGGER_LINE = "Dev2/port2/line5"
+
+
+5.2 CMOS TIMING OUT Return to NI
+
+Use SCB-68A terminal 10 as the timing input.
+
+Final timing return wiring:
+
+CMOS TIMING OUT center conductor
+→ SCB-68A Terminal 10
+
+CMOS TIMING OUT shield / ground
+→ SCB-68A Terminal 9
+
+Function:
+
+CMOS real exposure/frame timing signal
+→ NI digital input
+→ optional timing record
+
+Assumed terminal mapping:
+
+Terminal 10 = PFI1 / P1.1
+Terminal 9  = D GND
+
+Python line mapping:
+
+DAQ_TIMING_LINE = "Dev1/port1/line1"
+
+If NI MAX shows the device name is not Dev1, replace Dev1 accordingly:
+
+DAQ_TIMING_LINE = "Dev2/port1/line1"
+
+
+6. FINAL MINIMAL WIRING SUMMARY
+
+Use two SMA coaxial cables.
+
+Cable 1: Trigger cable
+
+SMA side:
+CMOS EXT. TRIG
+
+Bare-wire side:
+center conductor → SCB-68A Terminal 40
+shield layer     → SCB-68A Terminal 7
+
+Cable 2: Timing return cable
+
+SMA side:
+CMOS TIMING OUT
+
+Bare-wire side:
+center conductor → SCB-68A Terminal 10
+shield layer     → SCB-68A Terminal 9
+
+One-line summary:
+
+CMOS EXT. TRIG center → Terminal 40
+CMOS EXT. TRIG shield → Terminal 7
+
+CMOS TIMING OUT center → Terminal 10
+CMOS TIMING OUT shield → Terminal 9
+
+Python mapping:
+
+DAQ_TRIGGER_LINE = "Dev1/port2/line5"  # Terminal 40, PFI13/P2.5
+DAQ_TIMING_LINE  = "Dev1/port1/line1"  # Terminal 10, PFI1/P1.1
+
+
+7. IMPORTANT WIRING VERIFICATION BEFORE CONNECTING CAMERA
+
+Before connecting the CMOS camera, verify the NI trigger output.
+
+Recommended check:
+
+Oscilloscope or multimeter probe positive → SCB-68A Terminal 40
+Oscilloscope or multimeter ground         → SCB-68A Terminal 7
+
+Generate a digital pulse from NI MAX or Python.
+
+Expected waveform:
+
+0 V → 5 V → 0 V TTL pulse
+
+Only after this is confirmed should the line be connected to the CMOS EXT. TRIG input.
+
+For the CMOS TIMING OUT return:
+
+Test CMOS TIMING OUT separately if possible.
+Confirm that the camera outputs a timing pulse during exposure/frame acquisition.
+
+
+8. PYTHON CONTROL STRATEGY
+
+Use one Python script to coordinate both PI and NI.
+
+Python packages:
+
+pip install PIPython nidaqmx
+
+Also required:
+
+NI-DAQmx driver or runtime installed on Windows.
+NI device name confirmed in NI MAX, e.g. Dev1.
+
+Main control logic:
+
+Connect to PI E-727.3CD over USB/RS-232.
+Connect to NI PCIe-6353 through nidaqmx.
+Set CMOS camera software to external trigger mode.
+Move PI stage to initial X/Y/Z.
+Wait until PI reports target reached.
+For each Z position:
+    Move Z.
+    Wait until Z is on target.
+    Wait 30 ms for settling.
+    Send TTL pulse through NI Terminal 40.
+    CMOS captures one image.
+    Optionally read or record CMOS TIMING OUT through Terminal 10.
+    Save Z position and trigger timestamp.
+
+Minimal line constants:
+
+DAQ_TRIGGER_LINE = "Dev1/port2/line5"
+DAQ_TIMING_LINE  = "Dev1/port1/line1"
+
+If device name differs in NI MAX:
+
+DAQ_TRIGGER_LINE = "Dev2/port2/line5"
+DAQ_TIMING_LINE  = "Dev2/port1/line1"
+
+
+9. PYTHON SKELETON LOGIC
+
+import time
+import csv
+from pathlib import Path
+
+import nidaqmx
+from nidaqmx.constants import LineGrouping
+
+from pipython import GCSDevice, pitools
+
+
+PI_CONTROLLER = "E-727"
+
+DAQ_TRIGGER_LINE = "Dev1/port2/line5"  # SCB-68A Terminal 40
+DAQ_TIMING_LINE  = "Dev1/port1/line1"  # SCB-68A Terminal 10, optional
+
+AXIS_X = 1
+AXIS_Y = 2
+AXIS_Z = 3
+
+X0 = 100.00
+Y0 = 100.00
+Z0 = 50.00
+
+Z_START = 48.00
+Z_END = 52.00
+Z_STEP = 0.01
+
+SETTLE_TIME_S = 0.030
+TRIGGER_PULSE_S = 0.005
+
+LOG_PATH = Path("z_scan_trigger_log.csv")
+
+
+def make_z_positions(z_start, z_end, z_step):
+    n = int(round((z_end - z_start) / z_step)) + 1
+    return [round(z_start + i * z_step, 2) for i in range(n)]
+
+
+def trigger_camera(task, pulse_width_s=0.005):
+    task.write(False)
+    time.sleep(0.001)
+
+    task.write(True)
+    time.sleep(pulse_width_s)
+
+    task.write(False)
+
+
+def main():
+    z_positions = make_z_positions(Z_START, Z_END, Z_STEP)
+
+    with LOG_PATH.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["index", "z_um", "trigger_time_s"])
+
+        with nidaqmx.Task() as trig_task:
+            trig_task.do_channels.add_do_chan(
+                DAQ_TRIGGER_LINE,
+                line_grouping=LineGrouping.CHAN_PER_LINE
+            )
+            trig_task.write(False)
+
+            with GCSDevice(PI_CONTROLLER) as pi:
+                pi.InterfaceSetupDlg()
+                print("Connected PI:", pi.qIDN().strip())
+
+                try:
+                    pi.SVO([AXIS_X, AXIS_Y, AXIS_Z], [True, True, True])
+                except Exception as exc:
+                    print("SVO skipped or failed:", exc)
+
+                pi.MOV({AXIS_X: X0, AXIS_Y: Y0, AXIS_Z: Z0})
+                pitools.waitontarget(pi, axes=[AXIS_X, AXIS_Y, AXIS_Z])
+
+                t0 = time.perf_counter()
+
+                for i, z in enumerate(z_positions):
+                    pi.MOV(AXIS_Z, z)
+                    pitools.waitontarget(pi, axes=AXIS_Z)
+
+                    time.sleep(SETTLE_TIME_S)
+
+                    trigger_camera(trig_task, TRIGGER_PULSE_S)
+
+                    t = time.perf_counter() - t0
+                    writer.writerow([i, z, f"{t:.6f}"])
+
+                    print(f"{i:04d}  Z = {z:.2f} um  trigger @ {t:.6f} s")
+
+            trig_task.write(False)
+
+    print(f"Log saved to: {LOG_PATH}")
+
+
+if __name__ == "__main__":
+    main()
+
+Important limitation:
+
+This is software-timed coordination under Windows.
+It is suitable for step-and-shoot Z-stack imaging.
+It may have millisecond-level timing jitter.
+
+For the current use case:
+
+Move → wait on target → settle 30 ms → trigger
+
+This is acceptable as a first implementation.
+
+
+10. CAMERA SOFTWARE SETTINGS
+
+The CMOS camera software must be set to:
+
+External trigger mode
+Rising edge trigger, unless the camera manual requires otherwise
+One frame per trigger
+Save image sequence
+
+The camera must be ready and waiting for external triggers before Python starts sending NI pulses.
+
+If no images are captured, check in this order:
+
+1. Is CMOS set to external trigger mode?
+2. Is NI Terminal 40 outputting TTL pulse relative to Terminal 7?
+3. Is the SMA center conductor connected to 40?
+4. Is the SMA shield connected to 7?
+5. Is the trigger polarity correct?
+6. Is the trigger pulse width long enough?
+
+
+11. REQUIRED CABLE LIST
+
+Buy:
+
+1. SMA male to bare-wire coaxial cable ×2
+   - One for CMOS EXT. TRIG.
+   - One for CMOS TIMING OUT.
+
+2. Small flat-head screwdriver ×1
+   - For SCB-68A screw terminals.
+
+3. Short shielded signal wire / terminal wire if needed
+   - For organizing or extending bare wire ends.
+
+Already required or assumed present:
+
+4. SHC68-68-EPM cable
+   - PCIe-6353 to SCB-68A.
+
+5. USB or RS-232 cable
+   - Computer to E-727.3CD.
+
+6. Original PI stage cable
+   - E-727.3CD to PI nano XYZ stage.
+
+Do not prioritize buying:
+
+Sub-D15 analog cable
+NI AO-to-PI analog control cable
+
+Reason:
+
+E-727.3CD has no analog input.
+
+
+12. DO-NOT-DO LIST
+
+Do not do these:
+
+1. Do not connect CMOS directly to PI E-727.
+2. Do not connect NI AO to E-727.3CD.
+3. Do not assume SCB-68A terminal number equals channel number.
+4. Do not short SMA center conductor and shield.
+5. Do not connect the camera before verifying NI trigger output.
+6. Do not run PIMikroMove and Python simultaneously if both try to connect to E-727.
+7. Do not expect PIMikroMove MOV/WAC/DEL macro alone to trigger the CMOS.
+8. Do not use AO0/AO1 for this E-727.3CD system.
+9. Do not assume the blue SCB-68A box is the PCIe-6353 card itself.
+10. Do not assume the image data goes through NI.
+
+
+13. DEBUGGING CHECKLIST
+
+If the PI stage does not move, check:
+
+1. Is E-727 connected by USB or RS-232?
+2. Is PIMikroMove closed before Python starts?
+3. Does pi.InterfaceSetupDlg() find the controller?
+4. Is servo enabled?
+5. Are axis numbers correct: X=1, Y=2, Z=3?
+
+If the camera does not trigger, check:
+
+1. Is CMOS in external trigger mode?
+2. Is EXT. TRIG connected, not TIMING OUT?
+3. Is SCB-68A Terminal 40 outputting TTL pulse against Terminal 7?
+4. Is the cable center conductor on 40?
+5. Is the shield on 7?
+6. Is Python using Dev1/port2/line5?
+7. Is the NI device name actually Dev1 in NI MAX?
+8. Is the pulse width long enough, e.g. 5 ms?
+
+If timing return does not work, check:
+
+1. Is CMOS TIMING OUT enabled in camera settings?
+2. Is TIMING OUT center conductor connected to Terminal 10?
+3. Is TIMING OUT shield connected to Terminal 9?
+4. Is Python reading Dev1/port1/line1?
+5. Is the camera output pulse voltage compatible with NI digital input?
+
+
+14. FINAL ONE-SENTENCE SYSTEM UNDERSTANDING
+
+The PI E-727.3CD controls stage motion through USB/RS-232, while the NI PCIe-6353 through SCB-68A triggers the CMOS camera and optionally records CMOS timing. The final wiring is EXT.TRIG center to terminal 40, EXT.TRIG shield to terminal 7, TIMING OUT center to terminal 10, and TIMING OUT shield to terminal 9.

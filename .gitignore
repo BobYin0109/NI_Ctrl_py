@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+.pytest_cache/
+pytest-cache-files-*/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Experiment outputs
+logs/
+data/
+*.csv
+*.tif
+*.tiff
+*.nd2
+*.czi
+
+# Local/editor files
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+Desktop.ini
