@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Iterable
 from decimal import Decimal
-from typing import Iterable, Protocol
+from typing import Protocol
 
 from .config import AxesConfig, PIConfig
 from .scan_plan import format_um
@@ -23,7 +24,7 @@ class DryRunStage:
     def __init__(self, delay_s: float = 0.001) -> None:
         self.delay_s = delay_s
 
-    def __enter__(self) -> "DryRunStage":
+    def __enter__(self) -> DryRunStage:
         LOG.info("DRY RUN: PI stage connection skipped.")
         return self
 
@@ -47,7 +48,7 @@ class PIStage:
         self._device = None
         self._pitools = None
 
-    def __enter__(self) -> "PIStage":
+    def __enter__(self) -> PIStage:
         self.connect()
         return self
 
