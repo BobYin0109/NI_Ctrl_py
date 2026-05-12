@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from decimal import Decimal, InvalidOperation
-from typing import Iterable, Sequence
 
 MICROMETER_QUANT = Decimal("0.000001")
 
