@@ -18,7 +18,7 @@ Verify the SCB-68A label and NI MAX device name before connecting the camera.
 | --- | --- | --- | --- |
 | Trigger signal | `EXT. TRIG` center conductor | Terminal 40 | `Dev1/port2/line5` |
 | Trigger ground | `EXT. TRIG` shield | Terminal 7 / D GND | n/a |
-| Timing signal | `TIMING OUT` center conductor | Terminal 10 | `Dev1/port1/line1` |
+| Timing signal | `TIMING OUT` center conductor | Terminal 41 | `Dev1/port1/line4` |
 | Timing ground | `TIMING OUT` shield | Terminal 9 / D GND | n/a |
 
 If NI MAX reports a different device name, replace `Dev1` in the JSON config.
@@ -37,6 +37,9 @@ ni-ctrl test-pulse --line Dev1/port2/line5 --count 10 --pulse-width-s 0.005
 Expected result: a clean TTL pulse relative to digital ground.
 
 Only connect the CMOS `EXT. TRIG` input after this measurement is correct.
+
+The current tested local wiring uses SCB-68A Terminal 41 for CMOS `TIMING OUT`
+and Terminal 9 for its ground. Do not use Terminal 8 as timing ground.
 
 ## CMOS Settings
 

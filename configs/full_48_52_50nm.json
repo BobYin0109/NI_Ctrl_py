@@ -3,7 +3,8 @@
   "log_path": "logs/full_48_52_50nm_z_scan.csv",
   "pi": {
     "controller": "E-727",
-    "connection": "dialog",
+    "connection": "usb",
+    "usb_serial": "0121031417",
     "enable_servo": true
   },
   "axes": {
@@ -23,12 +24,14 @@
   },
   "daq": {
     "trigger_line": "Dev1/port2/line5",
-    "timing_lines": ["Dev1/port1/line1"],
+    "timing_lines": ["Dev1/port1/line4"],
     "read_timing_snapshots": false
   },
   "timing": {
-    "settle_time_s": 0.03,
-    "trigger_pulse_s": 0.005,
-    "pre_trigger_low_s": 0.001
+    "settle_time_s": 0.5,
+    "trigger_pulse_s": 0.05,
+    "pre_trigger_low_s": 0.001,
+    "triggers_per_position": 1,
+    "inter_trigger_interval_s": 0.5
   }
 }

@@ -53,6 +53,8 @@ class TimingConfig:
     settle_time_s: float = 0.03
     trigger_pulse_s: float = 0.005
     pre_trigger_low_s: float = 0.001
+    triggers_per_position: int = 1
+    inter_trigger_interval_s: float = 0.0
 
 
 @dataclass(frozen=True)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ni-ctrl-py"
-version = "0.1.0"
+version = "0.2.0"
 description = "Step-and-shoot PI E-727 stage control with NI PCIe-6353 CMOS triggering."
 readme = "README.md"
 requires-python = ">=3.10"

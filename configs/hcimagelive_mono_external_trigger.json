@@ -1,0 +1,40 @@
+{
+  "application": "HCImageLive",
+  "camera": {
+    "model": "C13440-20CU",
+    "capture_preset": "Mono: 1 Channel",
+    "speed": 2,
+    "exposure_ms": {
+      "channel_1": 30.0
+    }
+  },
+  "trigger": {
+    "capture_mode": "External Edge Trigger",
+    "external_input_trigger_option": "Pos",
+    "delay_us": 0,
+    "master_pulse": false
+  },
+  "sequence": {
+    "scan_type": "Time Lapse",
+    "autosave": true,
+    "file_type": "TIFF",
+    "destination": "to Disk",
+    "display_mode": "Live Image",
+    "control": "End Frame",
+    "end_frame_for_49_51_10nm_stack": 201
+  },
+  "autosave_properties": {
+    "prefix": "Image",
+    "start_number": 1,
+    "use_leading_zeros": false,
+    "overwrite_existing_data": false,
+    "folder_example": "D:\\荧光点拍摄实验\\test20260513\\9"
+  },
+  "notes": [
+    "Stop Live before starting the external-trigger sequence.",
+    "Nikon Eclipse Ti2 auto focus lock must be disabled for real Z-stack defocus.",
+    "Click Start in HCImageLive before running ni-ctrl scan.",
+    "With Mono: 1 Channel, one NI trigger saves one TIFF image.",
+    "For RGB Color: 2-Band, HCImageLive behaved as two NI triggers per saved TIFF during local testing."
+  ]
+}

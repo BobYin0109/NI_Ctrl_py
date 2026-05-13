@@ -6,12 +6,13 @@ Python project for step-and-shoot super-resolution bead imaging with:
 - NI PCIe-6353 + SCB-68A digital trigger output
 - CMOS camera in external-trigger mode
 
-The default production scan plan is:
+The tested production scan plan is:
 
-- Z range: `48.00 um` to `52.00 um`
-- Step: `0.05 um` / `50 nm`
-- Positions: `81`
+- Z range: `49.000 um` to `51.000 um`
+- Step: `0.010 um` / `10 nm`
+- Positions: `201`
 - Sequence: move Z -> wait on target -> settle -> TTL trigger -> log
+- End behavior: return Z to `50.00 um`
 
 ## Safety Model
 
@@ -44,11 +45,11 @@ Required vendor software:
 
 ## Dry Run
 
-Check the full 48-52 um / 50 nm plan without touching hardware:
+Check the full 49-51 um / 10 nm plan without touching hardware:
 
 ```powershell
-ni-ctrl plan --config configs/full_48_52_50nm.json
-ni-ctrl dry-run --config configs/full_48_52_50nm.json
+ni-ctrl plan --config configs/z_stack_201_49_51_10nm.json
+ni-ctrl dry-run --config configs/z_stack_201_49_51_10nm.json
 ```
 
 ## Hardware Bring-Up
@@ -80,10 +81,10 @@ ni-ctrl dry-run --config configs/small_test.json
 ni-ctrl scan --config configs/small_test.json --confirm-hardware
 ```
 
-6. After the small scan is correct, run the production scan:
+6. After the small scan is correct, run the tested 201-image production scan:
 
 ```powershell
-ni-ctrl scan --config configs/full_48_52_50nm.json --confirm-hardware
+ni-ctrl scan --config configs/z_stack_201_49_51_10nm.json --confirm-hardware
 ```
 
 ## Expected Wiring Candidates
@@ -92,10 +93,30 @@ The project defaults match the local experiment notes:
 
 - CMOS `EXT. TRIG` center -> SCB-68A Terminal 40 -> `Dev1/port2/line5`
 - CMOS `EXT. TRIG` shield -> SCB-68A Terminal 7 / D GND
-- CMOS `TIMING OUT` center -> SCB-68A Terminal 10 -> `Dev1/port1/line1`
+- CMOS `TIMING OUT` center -> SCB-68A Terminal 41 -> `Dev1/port1/line4`
 - CMOS `TIMING OUT` shield -> SCB-68A Terminal 9 / D GND
 
 Treat these as candidates until verified against NI MAX, the SCB-68A connector label, and a scope measurement.
+
+## Tested HCImageLive Setup
+
+Use `configs/hcimagelive_mono_external_trigger.json` as the camera-side settings record.
+
+Key tested settings:
+
+- Capture preset: `Mono: 1 Channel`
+- Capture mode: `External Edge Trigger`
+- Trigger edge: `Pos`
+- Sequence: `Time Lapse`
+- AutoSave: `TIFF`, `to Disk`
+- Control: `End Frame`
+- End frame for the 49-51 um / 10 nm stack: `201`
+- Nikon Eclipse Ti2 auto focus lock: disabled
+
+With `Mono: 1 Channel`, one NI trigger saves one TIFF image. During local testing,
+`RGB Color: 2-Band` required two triggers per saved TIFF.
+
+See `docs/RUNBOOK_2026_05_13.md` for the full tested workflow.
 
 ## Development
 

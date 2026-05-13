@@ -1,0 +1,37 @@
+{
+  "dry_run": false,
+  "log_path": "logs/z_stack_201_49_51_10nm.csv",
+  "pi": {
+    "controller": "E-727",
+    "connection": "usb",
+    "usb_serial": "0121031417",
+    "enable_servo": true
+  },
+  "axes": {
+    "x": "1",
+    "y": "2",
+    "z": "3"
+  },
+  "positions": {
+    "x_um": "100.00",
+    "y_um": "100.00",
+    "z_home_um": "50.00",
+    "z_start_um": "49.000",
+    "z_end_um": "51.000",
+    "z_step_um": "0.010",
+    "safe_z_min_um": "48.00",
+    "safe_z_max_um": "52.00"
+  },
+  "daq": {
+    "trigger_line": "Dev1/port2/line5",
+    "timing_lines": ["Dev1/port1/line4"],
+    "read_timing_snapshots": false
+  },
+  "timing": {
+    "settle_time_s": 0.5,
+    "trigger_pulse_s": 0.05,
+    "pre_trigger_low_s": 0.001,
+    "triggers_per_position": 1,
+    "inter_trigger_interval_s": 0.5
+  }
+}
