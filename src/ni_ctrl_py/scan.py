@@ -77,7 +77,29 @@ def run_scan(config: ScanConfig) -> Path:
             trigger as trigger_controller,
             NITimingSnapshot(config.daq) as timing,
         ):
-            _move_to_home(config, stage_controller)
+            z_return_um = to_decimal(config.positions.z_home_um)
+            if config.positions.use_current_z_as_center:
+                current_z_um = stage_controller.get_axis_position(config.axes.z)
+                configured_center_um = to_decimal(config.positions.z_home_um)
+                positions = tuple(
+                    (current_z_um + (position - configured_center_um))
+                    for position in positions
+                )
+                assert_within_limits(
+                    positions,
+                    config.positions.safe_z_min_um,
+                    config.positions.safe_z_max_um,
+                )
+                z_return_um = current_z_um
+                LOG.info(
+                    "Using current Z as scan center: current=%s um; configured center=%s um",
+                    format_um(current_z_um),
+                    format_um(configured_center_um),
+                )
+                LOG.info("Resolved scan plan: %s", describe_positions(positions))
+
+            initial_z_um = None if config.positions.use_current_z_as_center else z_return_um
+            _move_to_home(config, stage_controller, initial_z_um)
             t0 = time.perf_counter()
             try:
                 for index, z_um in enumerate(positions):
@@ -116,9 +138,8 @@ def run_scan(config: ScanConfig) -> Path:
                         elapsed_s,
                     )
             finally:
-                z_home = to_decimal(config.positions.z_home_um)
-                stage_controller.move_axis(config.axes.z, z_home)
-                LOG.info("Returned Z axis to home: %s um", format_um(z_home))
+                stage_controller.move_axis(config.axes.z, z_return_um)
+                LOG.info("Returned Z axis to center/home: %s um", format_um(z_return_um))
 
     LOG.info("Scan log written: %s", log_path)
     return log_path
@@ -141,10 +162,17 @@ def _make_writer(handle: TextIO) -> csv.DictWriter:
     return writer
 
 
-def _move_to_home(config: ScanConfig, stage_controller) -> None:  # type: ignore[no-untyped-def]
+def _move_to_home(
+    config: ScanConfig,
+    stage_controller,  # type: ignore[no-untyped-def]
+    z_um: Decimal | None,
+) -> None:
     home = {
         config.axes.x: to_decimal(config.positions.x_um),
         config.axes.y: to_decimal(config.positions.y_um),
-        config.axes.z: to_decimal(config.positions.z_home_um),
     }
+    if z_um is not None:
+        home[config.axes.z] = z_um
     stage_controller.move_many(home)
+
+

@@ -8,11 +8,11 @@ Python project for step-and-shoot super-resolution bead imaging with:
 
 The tested production scan plan is:
 
-- Z range: `49.000 um` to `51.000 um`
+- Z range: current focus center `-1.000 um` to current focus center `+1.000 um`
 - Step: `0.010 um` / `10 nm`
 - Positions: `201`
 - Sequence: move Z -> wait on target -> settle -> TTL trigger -> log
-- End behavior: return Z to `50.00 um`
+- End behavior: return Z to the scan-start current focus center
 
 ## Safety Model
 
@@ -45,7 +45,7 @@ Required vendor software:
 
 ## Dry Run
 
-Check the full 49-51 um / 10 nm plan without touching hardware:
+Check the full current-center +/-1 um / 10 nm plan without touching hardware:
 
 ```powershell
 ni-ctrl plan --config configs/z_stack_201_49_51_10nm.json
@@ -136,3 +136,4 @@ docs/                 Wiring and operating workflow
 tests/                Hardware-free tests
 .github/workflows/    GitHub Actions CI
 ```
+

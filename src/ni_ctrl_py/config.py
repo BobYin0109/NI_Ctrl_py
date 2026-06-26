@@ -33,6 +33,7 @@ class PositionsConfig:
     z_start_um: str = "48.00"
     z_end_um: str = "52.00"
     z_step_um: str = "0.05"
+    use_current_z_as_center: bool = False
     safe_z_min_um: str | None = None
     safe_z_max_um: str | None = None
 
@@ -95,3 +96,5 @@ def load_config(path: str | Path) -> ScanConfig:
         daq=_coerce_dataclass(DAQConfig, data.get("daq", {})),
         timing=_coerce_dataclass(TimingConfig, data.get("timing", {})),
     )
+
+

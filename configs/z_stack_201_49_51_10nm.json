@@ -19,6 +19,7 @@
     "z_start_um": "49.000",
     "z_end_um": "51.000",
     "z_step_um": "0.010",
+    "use_current_z_as_center": true,
     "safe_z_min_um": "48.00",
     "safe_z_max_um": "52.00"
   },
@@ -35,3 +36,4 @@
     "inter_trigger_interval_s": 0.5
   }
 }
+

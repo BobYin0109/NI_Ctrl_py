@@ -19,10 +19,14 @@ class StageController(Protocol):
     def move_axis(self, axis: str, position_um: Decimal) -> None:
         ...
 
+    def get_axis_position(self, axis: str) -> Decimal:
+        ...
+
 
 class DryRunStage:
     def __init__(self, delay_s: float = 0.001) -> None:
         self.delay_s = delay_s
+        self._positions_um: dict[str, Decimal] = {}
 
     def __enter__(self) -> DryRunStage:
         LOG.info("DRY RUN: PI stage connection skipped.")
@@ -34,11 +38,18 @@ class DryRunStage:
     def move_many(self, positions_um: dict[str, Decimal]) -> None:
         formatted = {axis: format_um(position) for axis, position in positions_um.items()}
         LOG.info("DRY RUN: move axes to %s um", formatted)
+        self._positions_um.update(
+            {str(axis): position for axis, position in positions_um.items()}
+        )
         time.sleep(self.delay_s)
 
     def move_axis(self, axis: str, position_um: Decimal) -> None:
         LOG.info("DRY RUN: move axis %s to %s um", axis, format_um(position_um))
+        self._positions_um[str(axis)] = position_um
         time.sleep(self.delay_s)
+
+    def get_axis_position(self, axis: str) -> Decimal:
+        return self._positions_um.get(str(axis), Decimal("50.00"))
 
 
 class PIStage:
@@ -121,3 +132,12 @@ class PIStage:
         axis_name = str(axis)
         self._device.MOV(axis_name, float(position_um))
         self._pitools.waitontarget(self._device, axes=[axis_name])
+
+    def get_axis_position(self, axis: str) -> Decimal:
+        assert self._device is not None
+        axis_name = str(axis)
+        position = self._device.qPOS(axis_name)[axis_name]
+        return Decimal(str(position))
+
+
+

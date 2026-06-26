@@ -1,573 +1,299 @@
-AI CONTEXT PACK — PI E-727.3CD + NI PCIe-6353 + SCB-68A + CMOS Triggered Z-Stack Imaging
+AI CONTEXT PACK - NI_Ctrl_py / PI E-727.3CD + NI PCIe-6353 + HCImageLive CMOS Z-stack
+Last updated: 2026-06-26
+Language/context: user prefers Chinese; this file is for handing off the whole experiment and software state to another agent.
+
+1. Current Goal
+
+The user is running triggered fluorescence Z-stack imaging. Python controls a PI E-727.3CD piezo stage and an NI PCIe-6353 DAQ. HCImageLive controls/saves frames from a Hamamatsu CMOS camera. The normal production scan is:
+
+- Arm HCImageLive Sequence in external-trigger Time Lapse mode.
+- Python reads the current PI Z at scan start and treats it as the center. It then moves from current_z - 1.000 um to current_z + 1.000 um in fixed 0.010 um steps.
+- At each Z, Python waits for the PI controller to report target reached, waits an extra settle time, then sends one TTL pulse from NI to the camera external trigger.
+- HCImageLive saves one TIFF per trigger.
+- At the end, Python returns PI Z to the scan-start current_z center.
+- After every scan, verify Z returned to the scan-start center and verify the TIFF directory contents and image metrics.
+
+The user explicitly requested: after every scan, always check whether the stage returned to the correct center, then check the directory TIFFs are normal and meet requirements, including whether image content shows correct Z information. New rule from 2026-06-26: if the user manually refocuses before a scan, that current Z is the new center. The nominal 49/50/51 config is interpreted relative to that current center.
+
+2. Repository State
+
+Repository path:
+D:\code\NI_Ctrl_py
+
+GitHub repository:
+https://github.com/BobYin0109/NI_Ctrl_py
+
+Already pushed earlier:
+- branch: main
+- commit: dcb08f7 Add tested Z-stack acquisition workflow
+- tag: v0.2.0
+- author identity used: BobYin0109 <1312601384@qq.com>
+
+Important files:
+- configs\z_stack_201_49_51_10nm.json: production 201-frame Z-stack config.
+- src\ni_ctrl_py\pi_stage.py: PI stage wrapper.
+- src\ni_ctrl_py\scan.py: scan loop, trigger loop, and final return-to-home behavior.
+- README.md / docs: project usage docs.
+- AI_Context_Pack.txt: this handoff document.
+
+3. Hardware
+
+PI stage/controller:
+- PI E-727.3CD
+- Controlled through PIPython.
+- USB serial in config: 0121031417
+- Observed controller ID: E-727.3CD, 121031417, 01.028
+
+NI DAQ:
+- NI PCIe-6353, device name Dev1
+- SCB-68A terminal block
+
+Camera / software:
+- HCImageLive
+- Camera shown as C13440-20CU, S/N 304831
+
+Microscope:
+- Nikon Eclipse Ti2
+- Has autofocus/lock-focus. It must be disabled for real Z-stack defocus scans. If left enabled, the microscope tracks focus while Z moves, making frames look repeated.
+
+4. Confirmed Wiring
+
+CMOS External Trigger:
+- CMOS external trigger center conductor -> SCB-68A terminal 40
+- CMOS external trigger shield/GND -> SCB-68A terminal 7
+- Terminal 40 = PFI13 / P2.5 = DAQmx line Dev1/port2/line5
+
+CMOS Timing:
+- CMOS timing output center conductor -> SCB-68A terminal 41
+- CMOS timing output shield/GND -> SCB-68A terminal 9
+- Terminal 41 = PFI4 / P1.4 = DAQmx line Dev1/port1/line4
+
+Critical warning:
+- SCB-68A terminal 8 is +5 V, not GND. Do not connect the CMOS timing GND to terminal 8.
+
+Additional mirror / galvo / turning mirror:
+- Connected to SCB-68A terminal 21 and 55.
+- Terminal 21 = AO1.
+- Terminal 55 = AO GND.
+- NI MAX can output a triangle wave on Dev1/ao1 and the mirror works.
+- This AO task is independent of the Python DIO camera trigger lines and should not conflict unless NI tasks lock the same device/resources.
+
+5. HCImageLive Camera Settings Used Successfully
+
+Capture tab:
+- Capture Preset: Mono: 1 Channel
+- Camera: C13440-20CU S/N 304831
+- AutoSave: checked
+- Open Capture1: checked if desired
+- Stop Live before arming Sequence for external trigger acquisition.
+
+Trigger Modes, Speed and Registration:
+- Speed: 2
+- Capture Mode: External Edge Trigger
+- External Input Trigger Option: Pos
+- Delay: 0 us
+- Master Pulse: unchecked
+- Show Output Trigger Options may be checked, but not required for Python trigger.
+
+Sequence tab:
+- Select Scan Type: Time Lapse
+- AutoSave: checked
+- File type: TIFF
+- Destination: to Disk
+- Live Image selected
+- Control: End Frame
+- Production End Frame: 201
+- 3-pulse diagnostic End Frame: 3
+- Prefix commonly Image, but HCImageLive may produce prefixes like Image1_ or Image2_. Do not assume prefix, count/sort TIFFs numerically.
+- Overwrite Existing Data: unchecked.
+
+Autosave folders used recently:
+- D:\荧光点拍摄实验\test20260626\1
+- D:\荧光点拍摄实验\test20260626\2
+
+Important: user noted folder D:\荧光点拍摄实验\test20260626\1 contains another folder named LSNR. Do not delete or overwrite unrelated folders/files.
+
+6. Meaning of HCImageLive Settings
+
+Speed:
+- HCImageLive camera readout speed, not PI movement speed and not NI trigger speed.
+- Successful scans used Speed = 2. Keep Speed = 2 unless there is a clear reason to re-characterize.
+
+Mono vs RGB Color / 2-Band:
+- Current workflow uses Mono: 1 Channel.
+- Earlier RGB Color: 2-Band looked like it saved combined/multi-channel images and appeared to need two camera triggers per saved TIFF; file size was about 24 MB.
+- If using 2-Band in future, likely set triggers_per_position=2 to keep one saved image per Z position. For current production, keep Mono: 1 Channel and one trigger per Z.
+
+7. Production Scan Config
+
+Production config file:
+configs\z_stack_201_49_51_10nm.json
+
+Core values:
+- z_start_um: 49.000 nominal/reference value
+- z_end_um: 51.000 nominal/reference value
+- z_step_um: 0.010
+- use_current_z_as_center: true
+- actual scan range: current_z_at_scan_start - 1.000 um to current_z_at_scan_start + 1.000 um
+- expected frames: 201
+- x_home_um: 100.00
+- y_home_um: 100.00
+- z_home_um: 50.00 reference center; when use_current_z_as_center=true, return target is the scan-start current Z
+- safe_z_min_um: 48.00
+- safe_z_max_um: 52.00
+- settle_time_s: 0.5
+- trigger_pulse_s: 0.05
+- pre_trigger_low_s: 0.001
+- triggers_per_position: 1
+- inter_trigger_interval_s: 0.5
+- trigger_line: Dev1/port2/line5
+- timing_lines: [Dev1/port1/line4]
+- read_timing_snapshots: false
+
+Image index to Z mapping for clean 201-frame production folder:
+Z_um = current_z_at_scan_start - 1.000 + (image_index - 1) * 0.010
+Examples:
+- image index 1 -> Z = current_z_at_scan_start - 1.000 um
+- image index 101 -> Z = current_z_at_scan_start
+- image index 201 -> Z = current_z_at_scan_start + 1.000 um
+
+This mapping assumes exactly one TIFF per trigger and no extra test frames in the same folder.
+
+8. Commands
+
+Plan scan:
+.\.venv\Scripts\ni-ctrl.exe plan --config configs\z_stack_201_49_51_10nm.json
+
+Run full production scan:
+.\.venv\Scripts\ni-ctrl.exe scan --config configs\z_stack_201_49_51_10nm.json --confirm-hardware
+
+3-pulse camera/HCImageLive diagnostic:
+.\.venv\Scripts\ni-ctrl.exe test-pulse --line Dev1/port2/line5 --count 3 --pulse-width-s 0.05 --period-s 1.0
+
+Query PI position directly:
+.\.venv\Scripts\python.exe -u -c "from pipython import GCSDevice; d=GCSDevice('E-727'); d.ConnectUSB('0121031417'); print('qPOS:', d.qPOS()); d.CloseConnection()"
+
+9. Code Behavior / Timing
+
+PI movement:
+- src\ni_ctrl_py\pi_stage.py uses MOV and then pitools.waitontarget(...).
+
+Scan loop:
+- src\ni_ctrl_py\scan.py reads current Z at scan start when use_current_z_as_center=true, resolves the nominal 49/50/51 range into current_z-1/current_z/current_z+1, then moves to each resolved Z.
+- It waits until target is reached.
+- It sleeps settle_time_s (currently 0.5 s).
+- It sends trigger_pulse_s TTL pulse on Dev1/port2/line5.
+- In a finally block, it moves Z back to the scan-start current Z center when use_current_z_as_center=true.
+
+Answer to user concern about moving too fast:
+- Under normal conditions, Python should not trigger before the PI stage reaches target because it waits for the PI controller target state, then waits an additional 0.5 s settle time.
+- A problem could still happen if the PI controller falsely reports on-target, there is mechanical settling beyond the configured wait, HCImageLive drops triggers, or a folder contains extra/missing files. That is why image and count verification after each scan is mandatory.
+
+10. Mandatory Post-Scan Checks
+
+After every scan, do all of these:
+
+1. Query PI qPOS directly, not only rely on scan log. Confirm Z is approximately the scan-start current center. If the user manually refocused before scanning, this may not be absolute 50.000 um.
+2. Count TIFF files in the target directory. Expected count is usually 201, except for explicit 3-pulse tests.
+3. Confirm first and last files exist and file sizes are normal. Mono 2048x2048 uint16 TIFFs have been about 8,389,412 bytes.
+4. Inspect image content using Python/tifffile/numpy:
+   - count = expected
+   - shape = (2048, 2048)
+   - dtype = uint16
+   - mean/std/max plausible
+   - not all black, not all saturated, not only uniform noise
+   - sharpness or contrast metric changes across Z
+5. Report whether the image series appears Z-dependent.
+
+11. Recent Verified Data
+
+Folder:
+D:\荧光点拍摄实验\test20260626\1
+
+Status:
+- Contains 201 TIFFs plus an existing LSNR subfolder.
+- Files include Image1_1.tif through Image1_201.tif.
+- Shape: 2048 x 2048.
+- dtype: uint16.
+- File size: about 8,389,412 bytes each.
+- Image content was normal and Z-dependent.
+- Sharpness peak observed near frame 13, corresponding to Z approximately 49.120 um.
+- First/middle/last sharpness examples: 15.989, 14.460, 13.483.
+- First-vs-last downsample correlation about 0.898073.
+- Mean range about 102.638 to 109.247.
+
+Folder:
+D:\荧光点拍摄实验\test20260626\2
+
+History:
+- There was an initial false run with no TIFF output because HCImageLive was not actually saving/armed correctly.
+- A 3-pulse diagnostic then produced 3 TIFFs.
+- The user then cleared/restarted appropriately.
+- Final full scan succeeded.
+
+Final successful status:
+- 201 TIFFs saved.
+- Files include Image2_1.tif through Image2_201.tif.
+- qPOS after scan: X=100.0019226, Y=99.99956512, Z=50.00203705.
+- File sizes about 8,389,412 bytes.
+
+12. Common Failure Modes and Recovery
+
+If no TIFFs appear after Python scan:
+- Do not blindly rerun full scan.
+- Stop Sequence in HCImageLive if active.
+- Stop Live.
+- Set AutoSave folder and click OK in AutoSave Properties.
+- Confirm AutoSave checked, TIFF, to Disk, Live Image, End Frame expected count.
+- Confirm Capture Mode = External Edge Trigger, Pos, Delay 0 us.
+- Click Start in Sequence.
+- Run the 3-pulse diagnostic.
+- If 3 TIFFs appear, then arm a clean folder and run full production scan.
+
+If HCImageLive hangs on Stop:
+- It previously happened. User requested ending HCImageLive. Killing/restarting HCImageLive may be needed, but avoid doing this unless user confirms, because it affects camera session state.
+
+If Live looks like noise after scan:
+- First query PI qPOS. It should be near Z=50.
+- If Z is 50 but live looks noisy, possible causes include HCImageLive still being in external trigger mode, light source/shutter/filter state, display contrast, or the actual best focus not being at 50. In folder 1, best sharpness was near 49.12.
+
+If Nikon lock focus is on:
+- Turn it off before Z-stack scans. Otherwise images may repeat because microscope focus follows the Z change.
+
+If PI MikroMove is open:
+- It can occupy the PI controller connection. Earlier the user closed MikroMove before Python control. Keep other PI control software closed when Python needs to connect.
+
+13. Practical Operator Checklist for a 201-Frame Scan
+
+1. Disable Nikon Ti2 autofocus/lock focus.
+2. Set/verify HCImageLive Capture Preset = Mono: 1 Channel.
+3. Set Speed = 2.
+4. Set Capture Mode = External Edge Trigger, Pos, Delay 0 us.
+5. Stop Live.
+6. In Sequence, set Time Lapse, AutoSave, TIFF, to Disk, Live Image, End Frame = 201.
+7. Set AutoSave folder to a clean target directory. Do not overwrite existing unrelated folders.
+8. Click OK in AutoSave Properties.
+9. Click Start in Sequence so HCImageLive waits for external triggers.
+10. Run Python scan command.
+11. After scan, query qPOS and verify Z approx 50.
+12. Verify TIFF count and image content.
+
+14. Current User Expectations
+
+- User expects concise Chinese operational guidance during experiments.
+- User has allowed file read/write in prior turns.
+- User does not want focus wasted on harmless RS-232 popup details if the workflow is not affected.
+- User wants real hardware/test progress, not only theoretical explanations.
+- For every scan, always verify stage return-to-50 and TIFF image validity.
+
+15. Notes for Future Agents
+
+- Be careful with folders containing previous data. Do not delete without explicit instruction.
+- For target folders, count only *.tif/*.tiff files and ignore subfolders like LSNR.
+- HCImageLive's filename prefix may change automatically; do not hard-code Image1_. Sort files by numeric suffix.
+- If user says Start has been clicked, it means HCImageLive Sequence is armed and waiting for external triggers.
+- If a 3-pulse diagnostic succeeds but a full run has no output, suspect HCImageLive state/folder/prefix rather than PI motion.
+- The mirror on AO1/AO GND is a separate analog output setup. It can run in NI MAX; Python scan currently controls camera trigger via DIO and PI stage via USB.
 
-1. MAIN PURPOSE
 
-The user wants help with two tightly coupled tasks:
 
-1) Writing Python code to control a PI nano XYZ piezo stage and a CMOS camera for stepwise imaging.
-2) Confirming the physical wiring scheme so that the Python code, NI DAQ line names, SCB-68A terminal numbers, and CMOS ports match exactly.
-
-The key requirement is safety and correctness. Wrong wiring may cause the CMOS not to trigger, timing not to be recorded, or the signal to be shorted.
-
-Target experiment:
-
-Move PI stage to a Z position
-→ wait until the stage reaches target
-→ wait a short settling time, e.g. 30 ms
-→ NI PCIe-6353 sends TTL trigger to CMOS
-→ CMOS captures one frame
-→ optionally CMOS TIMING OUT returns exposure/frame timing to NI
-→ repeat for all Z positions.
-
-Example scan:
-
-Z = 48.00 µm to 52.00 µm
-step = 0.01 µm
-total positions = 401
-
-The final implementation should use Python to coordinate PI motion and NI trigger output.
-
-
-2. CONFIRMED HARDWARE
-
-2.1 PI Motion System
-
-Confirmed PI controller model:
-
-PI E-727.3CD
-
-Meaning:
-
-3-axis controller
-Capacitive sensor feedback
-Digital controller
-No “A” suffix
-No “P” suffix
-
-Important consequence:
-
-E-727.3CD has no analog input/output interface.
-Only A/AP variants have analog input/output.
-Therefore, do not use NI AO to control the PI stage.
-
-Invalid chain:
-
-NI AO → E-727 analog input → control Z scan
-
-Correct PI motion control chain:
-
-Computer
-→ USB or RS-232
-→ PI E-727.3CD
-→ original PI stage cable
-→ PI nano XYZ piezo stage
-
-The stage motion should be controlled through PI software commands, for example:
-
-PIMikroMove macro
-PIPython
-GCS commands
-
-Example PIMikroMove-style logic:
-
-MOV 3 48.00
-WAC ONT? 3 = 1
-DEL 30
-
-This only moves the PI stage. It does not trigger the CMOS camera.
-
-
-2.2 NI DAQ System
-
-Confirmed NI hardware:
-
-NI PCIe-6353
-SCB-68A shielded I/O connector block
-SHC68-68-EPM 68-pin shielded cable
-
-From the NI quote:
-
-PCIe-6353: X Series DAQ, 32 AI, 48 DIO, 4 AO
-SCB-68A: shielded I/O connector block
-SHC68-68-EPM: shielded cable, 68-D-Type to 68 VHDCI offset, 1 m
-
-Physical relationship:
-
-Computer PCIe slot
-→ NI PCIe-6353 card inside the computer
-→ SHC68-68-EPM cable
-→ SCB-68A external terminal block
-→ CMOS trigger/timing wiring
-
-Important clarification:
-
-The blue box in the photos is the SCB-68A terminal block.
-The PCIe-6353 card is installed inside the computer.
-External wires are connected on the SCB-68A terminal block.
-
-
-2.3 CMOS Camera
-
-The CMOS rear panel has:
-
-EXT. TRIG input
-TIMING output
-Other digital outputs, temporarily not used
-
-The CMOS image data does not go through NI.
-
-Correct camera data chain:
-
-CMOS camera
-→ camera data cable
-→ image acquisition computer/software
-
-Correct trigger/timing chain:
-
-NI SCB-68A digital output
-→ CMOS EXT. TRIG
-
-CMOS TIMING OUT
-→ NI SCB-68A digital input
-
-The CMOS camera should not be directly connected to the PI E-727 controller.
-
-
-3. FINAL SYSTEM ARCHITECTURE
-
-Correct overall chain:
-
-Computer
-├── USB or RS-232
-│   └── PI E-727.3CD
-│       └── original PI stage cable
-│           └── PI nano XYZ piezo stage
-│
-├── PCIe slot
-│   └── NI PCIe-6353
-│       └── SHC68-68-EPM cable
-│           └── SCB-68A terminal block
-│               ├── digital output → CMOS EXT. TRIG
-│               └── digital input  ← CMOS TIMING OUT
-│
-└── camera data interface
-    └── CMOS camera image acquisition software
-
-Role separation:
-
-PI E-727.3CD:
-Controls stage motion through USB/RS-232.
-
-NI PCIe-6353 + SCB-68A:
-Triggers the CMOS camera and optionally records CMOS timing.
-
-CMOS camera:
-Captures images using its own image acquisition cable/software.
-
-
-4. COAXIAL CABLE EXPLANATION
-
-The CMOS trigger/timing ports use SMA-style coaxial connections.
-
-A coaxial cable has two conductive parts:
-
-Center conductor / center core = signal line
-Shield layer / braided outer conductor = ground / GND
-Outer insulation = protection only
-
-For each coaxial cable:
-
-Center conductor connects to the signal terminal.
-Shield layer connects to D GND.
-
-Do not allow the center conductor and shield layer to touch each other. That would short the signal to ground.
-
-The user should buy SMA male to bare-wire coaxial cables so that:
-
-SMA male side connects to the CMOS camera.
-Bare wire side connects to SCB-68A screw terminals.
-
-
-5. FINAL PHYSICAL WIRING SCHEME
-
-5.1 NI Trigger Output to CMOS EXT. TRIG
-
-Use SCB-68A terminal 40 as the trigger output.
-The right side of the SCB-68A had a label from previous users indicating it was used as trigger OUT.
-
-Final trigger wiring:
-
-CMOS EXT. TRIG center conductor
-→ SCB-68A Terminal 40
-
-CMOS EXT. TRIG shield / ground
-→ SCB-68A Terminal 7
-
-Function:
-
-NI digital output pulse
-→ CMOS external trigger input
-→ CMOS captures one frame
-
-Assumed terminal mapping:
-
-Terminal 40 = PFI13 / P2.5
-Terminal 7  = D GND
-
-Python line mapping:
-
-DAQ_TRIGGER_LINE = "Dev1/port2/line5"
-
-If NI MAX shows the device name is not Dev1, replace Dev1 accordingly:
-
-DAQ_TRIGGER_LINE = "Dev2/port2/line5"
-
-
-5.2 CMOS TIMING OUT Return to NI
-
-Use SCB-68A terminal 10 as the timing input.
-
-Final timing return wiring:
-
-CMOS TIMING OUT center conductor
-→ SCB-68A Terminal 10
-
-CMOS TIMING OUT shield / ground
-→ SCB-68A Terminal 9
-
-Function:
-
-CMOS real exposure/frame timing signal
-→ NI digital input
-→ optional timing record
-
-Assumed terminal mapping:
-
-Terminal 10 = PFI1 / P1.1
-Terminal 9  = D GND
-
-Python line mapping:
-
-DAQ_TIMING_LINE = "Dev1/port1/line1"
-
-If NI MAX shows the device name is not Dev1, replace Dev1 accordingly:
-
-DAQ_TIMING_LINE = "Dev2/port1/line1"
-
-
-6. FINAL MINIMAL WIRING SUMMARY
-
-Use two SMA coaxial cables.
-
-Cable 1: Trigger cable
-
-SMA side:
-CMOS EXT. TRIG
-
-Bare-wire side:
-center conductor → SCB-68A Terminal 40
-shield layer     → SCB-68A Terminal 7
-
-Cable 2: Timing return cable
-
-SMA side:
-CMOS TIMING OUT
-
-Bare-wire side:
-center conductor → SCB-68A Terminal 10
-shield layer     → SCB-68A Terminal 9
-
-One-line summary:
-
-CMOS EXT. TRIG center → Terminal 40
-CMOS EXT. TRIG shield → Terminal 7
-
-CMOS TIMING OUT center → Terminal 10
-CMOS TIMING OUT shield → Terminal 9
-
-Python mapping:
-
-DAQ_TRIGGER_LINE = "Dev1/port2/line5"  # Terminal 40, PFI13/P2.5
-DAQ_TIMING_LINE  = "Dev1/port1/line1"  # Terminal 10, PFI1/P1.1
-
-
-7. IMPORTANT WIRING VERIFICATION BEFORE CONNECTING CAMERA
-
-Before connecting the CMOS camera, verify the NI trigger output.
-
-Recommended check:
-
-Oscilloscope or multimeter probe positive → SCB-68A Terminal 40
-Oscilloscope or multimeter ground         → SCB-68A Terminal 7
-
-Generate a digital pulse from NI MAX or Python.
-
-Expected waveform:
-
-0 V → 5 V → 0 V TTL pulse
-
-Only after this is confirmed should the line be connected to the CMOS EXT. TRIG input.
-
-For the CMOS TIMING OUT return:
-
-Test CMOS TIMING OUT separately if possible.
-Confirm that the camera outputs a timing pulse during exposure/frame acquisition.
-
-
-8. PYTHON CONTROL STRATEGY
-
-Use one Python script to coordinate both PI and NI.
-
-Python packages:
-
-pip install PIPython nidaqmx
-
-Also required:
-
-NI-DAQmx driver or runtime installed on Windows.
-NI device name confirmed in NI MAX, e.g. Dev1.
-
-Main control logic:
-
-Connect to PI E-727.3CD over USB/RS-232.
-Connect to NI PCIe-6353 through nidaqmx.
-Set CMOS camera software to external trigger mode.
-Move PI stage to initial X/Y/Z.
-Wait until PI reports target reached.
-For each Z position:
-    Move Z.
-    Wait until Z is on target.
-    Wait 30 ms for settling.
-    Send TTL pulse through NI Terminal 40.
-    CMOS captures one image.
-    Optionally read or record CMOS TIMING OUT through Terminal 10.
-    Save Z position and trigger timestamp.
-
-Minimal line constants:
-
-DAQ_TRIGGER_LINE = "Dev1/port2/line5"
-DAQ_TIMING_LINE  = "Dev1/port1/line1"
-
-If device name differs in NI MAX:
-
-DAQ_TRIGGER_LINE = "Dev2/port2/line5"
-DAQ_TIMING_LINE  = "Dev2/port1/line1"
-
-
-9. PYTHON SKELETON LOGIC
-
-import time
-import csv
-from pathlib import Path
-
-import nidaqmx
-from nidaqmx.constants import LineGrouping
-
-from pipython import GCSDevice, pitools
-
-
-PI_CONTROLLER = "E-727"
-
-DAQ_TRIGGER_LINE = "Dev1/port2/line5"  # SCB-68A Terminal 40
-DAQ_TIMING_LINE  = "Dev1/port1/line1"  # SCB-68A Terminal 10, optional
-
-AXIS_X = 1
-AXIS_Y = 2
-AXIS_Z = 3
-
-X0 = 100.00
-Y0 = 100.00
-Z0 = 50.00
-
-Z_START = 48.00
-Z_END = 52.00
-Z_STEP = 0.01
-
-SETTLE_TIME_S = 0.030
-TRIGGER_PULSE_S = 0.005
-
-LOG_PATH = Path("z_scan_trigger_log.csv")
-
-
-def make_z_positions(z_start, z_end, z_step):
-    n = int(round((z_end - z_start) / z_step)) + 1
-    return [round(z_start + i * z_step, 2) for i in range(n)]
-
-
-def trigger_camera(task, pulse_width_s=0.005):
-    task.write(False)
-    time.sleep(0.001)
-
-    task.write(True)
-    time.sleep(pulse_width_s)
-
-    task.write(False)
-
-
-def main():
-    z_positions = make_z_positions(Z_START, Z_END, Z_STEP)
-
-    with LOG_PATH.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["index", "z_um", "trigger_time_s"])
-
-        with nidaqmx.Task() as trig_task:
-            trig_task.do_channels.add_do_chan(
-                DAQ_TRIGGER_LINE,
-                line_grouping=LineGrouping.CHAN_PER_LINE
-            )
-            trig_task.write(False)
-
-            with GCSDevice(PI_CONTROLLER) as pi:
-                pi.InterfaceSetupDlg()
-                print("Connected PI:", pi.qIDN().strip())
-
-                try:
-                    pi.SVO([AXIS_X, AXIS_Y, AXIS_Z], [True, True, True])
-                except Exception as exc:
-                    print("SVO skipped or failed:", exc)
-
-                pi.MOV({AXIS_X: X0, AXIS_Y: Y0, AXIS_Z: Z0})
-                pitools.waitontarget(pi, axes=[AXIS_X, AXIS_Y, AXIS_Z])
-
-                t0 = time.perf_counter()
-
-                for i, z in enumerate(z_positions):
-                    pi.MOV(AXIS_Z, z)
-                    pitools.waitontarget(pi, axes=AXIS_Z)
-
-                    time.sleep(SETTLE_TIME_S)
-
-                    trigger_camera(trig_task, TRIGGER_PULSE_S)
-
-                    t = time.perf_counter() - t0
-                    writer.writerow([i, z, f"{t:.6f}"])
-
-                    print(f"{i:04d}  Z = {z:.2f} um  trigger @ {t:.6f} s")
-
-            trig_task.write(False)
-
-    print(f"Log saved to: {LOG_PATH}")
-
-
-if __name__ == "__main__":
-    main()
-
-Important limitation:
-
-This is software-timed coordination under Windows.
-It is suitable for step-and-shoot Z-stack imaging.
-It may have millisecond-level timing jitter.
-
-For the current use case:
-
-Move → wait on target → settle 30 ms → trigger
-
-This is acceptable as a first implementation.
-
-
-10. CAMERA SOFTWARE SETTINGS
-
-The CMOS camera software must be set to:
-
-External trigger mode
-Rising edge trigger, unless the camera manual requires otherwise
-One frame per trigger
-Save image sequence
-
-The camera must be ready and waiting for external triggers before Python starts sending NI pulses.
-
-If no images are captured, check in this order:
-
-1. Is CMOS set to external trigger mode?
-2. Is NI Terminal 40 outputting TTL pulse relative to Terminal 7?
-3. Is the SMA center conductor connected to 40?
-4. Is the SMA shield connected to 7?
-5. Is the trigger polarity correct?
-6. Is the trigger pulse width long enough?
-
-
-11. REQUIRED CABLE LIST
-
-Buy:
-
-1. SMA male to bare-wire coaxial cable ×2
-   - One for CMOS EXT. TRIG.
-   - One for CMOS TIMING OUT.
-
-2. Small flat-head screwdriver ×1
-   - For SCB-68A screw terminals.
-
-3. Short shielded signal wire / terminal wire if needed
-   - For organizing or extending bare wire ends.
-
-Already required or assumed present:
-
-4. SHC68-68-EPM cable
-   - PCIe-6353 to SCB-68A.
-
-5. USB or RS-232 cable
-   - Computer to E-727.3CD.
-
-6. Original PI stage cable
-   - E-727.3CD to PI nano XYZ stage.
-
-Do not prioritize buying:
-
-Sub-D15 analog cable
-NI AO-to-PI analog control cable
-
-Reason:
-
-E-727.3CD has no analog input.
-
-
-12. DO-NOT-DO LIST
-
-Do not do these:
-
-1. Do not connect CMOS directly to PI E-727.
-2. Do not connect NI AO to E-727.3CD.
-3. Do not assume SCB-68A terminal number equals channel number.
-4. Do not short SMA center conductor and shield.
-5. Do not connect the camera before verifying NI trigger output.
-6. Do not run PIMikroMove and Python simultaneously if both try to connect to E-727.
-7. Do not expect PIMikroMove MOV/WAC/DEL macro alone to trigger the CMOS.
-8. Do not use AO0/AO1 for this E-727.3CD system.
-9. Do not assume the blue SCB-68A box is the PCIe-6353 card itself.
-10. Do not assume the image data goes through NI.
-
-
-13. DEBUGGING CHECKLIST
-
-If the PI stage does not move, check:
-
-1. Is E-727 connected by USB or RS-232?
-2. Is PIMikroMove closed before Python starts?
-3. Does pi.InterfaceSetupDlg() find the controller?
-4. Is servo enabled?
-5. Are axis numbers correct: X=1, Y=2, Z=3?
-
-If the camera does not trigger, check:
-
-1. Is CMOS in external trigger mode?
-2. Is EXT. TRIG connected, not TIMING OUT?
-3. Is SCB-68A Terminal 40 outputting TTL pulse against Terminal 7?
-4. Is the cable center conductor on 40?
-5. Is the shield on 7?
-6. Is Python using Dev1/port2/line5?
-7. Is the NI device name actually Dev1 in NI MAX?
-8. Is the pulse width long enough, e.g. 5 ms?
-
-If timing return does not work, check:
-
-1. Is CMOS TIMING OUT enabled in camera settings?
-2. Is TIMING OUT center conductor connected to Terminal 10?
-3. Is TIMING OUT shield connected to Terminal 9?
-4. Is Python reading Dev1/port1/line1?
-5. Is the camera output pulse voltage compatible with NI digital input?
-
-
-14. FINAL ONE-SENTENCE SYSTEM UNDERSTANDING
-
-The PI E-727.3CD controls stage motion through USB/RS-232, while the NI PCIe-6353 through SCB-68A triggers the CMOS camera and optionally records CMOS timing. The final wiring is EXT.TRIG center to terminal 40, EXT.TRIG shield to terminal 7, TIMING OUT center to terminal 10, and TIMING OUT shield to terminal 9.

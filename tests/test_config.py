@@ -18,5 +18,8 @@ def test_load_tested_201_image_config() -> None:
     assert config.positions.z_end_um == "51.000"
     assert config.positions.z_step_um == "0.010"
     assert config.positions.z_home_um == "50.00"
+    assert config.positions.use_current_z_as_center is True
     assert config.timing.triggers_per_position == 1
     assert "201 positions" in describe_config(config)
+
+
