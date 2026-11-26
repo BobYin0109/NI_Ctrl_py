@@ -1,18 +1,24 @@
 # NI Ctrl Py
 
+[English](README.md)
+
 用于逐点拍摄超分辨微球图像的 Python 项目，硬件包括：
 
 - 通过 USB/RS-232/GCS 控制的 PI E-727.3CD 纳米 XYZ 压电位移控制器
 - NI PCIe-6353 + SCB-68A 数字触发输出
 - 工作在外部触发模式下的 CMOS 相机
 
-已经测试过的正式扫描方案为：
+仓库记录了 201 帧硬件联调流程。当前版本以扫描启动时从 PI 位移台读取的 Z 位置为中心：
 
-- Z 范围：`49.000 um` 到 `51.000 um`
+- Z 范围：相对起始中心 ±1.000 µm
 - 步长：`0.010 um` / `10 nm`
 - 位置数：`201`
 - 流程：移动 Z -> 等待到位 -> 稳定等待 -> TTL 触发 -> 记录日志
-- 结束行为：Z 返回到 `50.00 um`
+- 结束行为：Z 返回扫描启动时读取的中心
+
+配置文件名沿用最初的 49–51 µm 示例。启用
+`positions.use_current_z_as_center` 后，配置中的中心和端点用于计算相对偏移，再平移到实时 Z。
+平移后的扫描必须落在配置的绝对 Z 安全范围内。此配置的 `plan` 和 `dry-run` 按 50 µm 中心预览，不读取实际位移台。
 
 ## 安全模型
 
@@ -45,7 +51,7 @@ python -m pip install -e ".[hardware]"
 
 ## Dry Run
 
-在不接触硬件的情况下检查完整的 49-51 um / 10 nm 扫描方案：
+在不连接硬件的情况下检查 ±1 µm、10 nm 步进的扫描方案：
 
 ```powershell
 ni-ctrl plan --config configs/z_stack_201_49_51_10nm.json
@@ -110,13 +116,13 @@ ni-ctrl scan --config configs/z_stack_201_49_51_10nm.json --confirm-hardware
 - Sequence：`Time Lapse`
 - AutoSave：`TIFF`，`to Disk`
 - Control：`End Frame`
-- 49-51 um / 10 nm 堆栈的 End frame：`201`
+- ±1 µm、10 nm 堆栈的 End frame：`201`
 - Nikon Eclipse Ti2 自动对焦锁定：关闭
 
 在 `Mono: 1 Channel` 下，一个 NI 触发会保存一张 TIFF 图像。本地测试中，
 `RGB Color: 2-Band` 需要两个触发才会保存一张 TIFF。
 
-完整的已测试工作流程见 `docs/RUNBOOK_2026_05_13.md`。
+201 帧流程见[采集操作记录](docs/RUNBOOK_2026_05_13.md)。双通道 SMLM 项目分析的 1 nm 微球扫描使用了另一套采集流程。
 
 ## 开发
 

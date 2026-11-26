@@ -1,18 +1,26 @@
 # NI Ctrl Py
 
+[简体中文](README.zh-CN.md)
+
 Python project for step-and-shoot super-resolution bead imaging with:
 
 - PI E-727.3CD nano XYZ piezo controller over USB/RS-232/GCS
 - NI PCIe-6353 + SCB-68A digital trigger output
 - CMOS camera in external-trigger mode
 
-The tested production scan plan is:
+The 201-frame scan is the hardware-tested workflow documented here. The current software centers that scan on the Z position read from the PI stage at startup:
 
 - Z range: current focus center `-1.000 um` to current focus center `+1.000 um`
 - Step: `0.010 um` / `10 nm`
 - Positions: `201`
 - Sequence: move Z -> wait on target -> settle -> TTL trigger -> log
 - End behavior: return Z to the scan-start current focus center
+
+The configuration filename retains the original 49–51 µm example. With
+`positions.use_current_z_as_center` enabled, the configured home and endpoints
+define offsets from the measured starting Z. The resolved scan must fit within
+the configured absolute Z safety limits. For this profile, `plan` and
+`dry-run` preview a 50 µm center without reading the real stage.
 
 ## Safety Model
 
@@ -110,13 +118,15 @@ Key tested settings:
 - Sequence: `Time Lapse`
 - AutoSave: `TIFF`, `to Disk`
 - Control: `End Frame`
-- End frame for the 49-51 um / 10 nm stack: `201`
+- End frame for the ±1 µm / 10 nm stack: `201`
 - Nikon Eclipse Ti2 auto focus lock: disabled
 
 With `Mono: 1 Channel`, one NI trigger saves one TIFF image. During local testing,
 `RGB Color: 2-Band` required two triggers per saved TIFF.
 
-See `docs/RUNBOOK_2026_05_13.md` for the full tested workflow.
+See the [acquisition runbook](docs/RUNBOOK_2026_05_13.md) for the tested
+201-frame workflow. The 1 nm bead scans analyzed in the separate Dual-channel
+SMLM project used a different acquisition workflow.
 
 ## Development
 
